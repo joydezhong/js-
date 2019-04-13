@@ -80,3 +80,15 @@ Cat.prototype.sound = function(){
 makeSound(new Dog()); // 汪汪汪
 makeSound(new Cat()); // 喵喵喵
 ```
+
+此时，如果我们需要添加另一个动物，我们只需要添加一些代码，而核心“做什么”函数`makeSound`是不变的。
+
+```javascript
+var Pig = function(){};
+
+Pig.prototype.sound = function(){
+	console.log('吼吼吼');
+};
+
+makeSound(new Pig()); // 吼吼吼
+```
