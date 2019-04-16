@@ -182,8 +182,204 @@ console.log(myObject.__name); //输出：undefined
 
 在面向对象的语言中，继承是通过类来实现的，而javascript是基于原型的面向对象的语言，所以javascript中的继承，也是基于原型的继承。
 
-在javascript中，一切皆对象，对象又是通过某个对象作为原型克隆出来的，这样不断地克隆，这样就形成了一条原型链，任何对象最终都指向Object，而继续往上查找返回的是null，让我们在浏览器的console窗口运行下面代码：
+在javascript中，一切皆对象，对象又是通过某个对象作为原型克隆出来的，这样不断地克隆，这样就形成了一条原型链，任何对象最终都指向Object.prototype，而继续往上查找返回的是null，让我们在浏览器的console窗口运行下面代码：
 
 ```javascript
-
+var s = new String('lisa'); 
+console.log(s);  // String {"lisa"}
+var o = s.__proto__;
+console.log(o);  // String {"", constructor: ƒ, anchor: ƒ, big: ƒ, blink: ƒ, …}
+var m = o.__proto__; 
+console.log(m);  // {constructor: ƒ, __defineGetter__: ƒ, __defineSetter__: ƒ, hasOwnProperty: ƒ, __lookupGetter__: ƒ, …}
+console.log(m.__proto__); // null
 ```
+
+我们先看这个__proto__属性，这是在chrome和firefox等现代浏览器环境下向外暴露的一个属性，它显示的指向原型链的上游，同时，它也等同于对象构造函数的原型。在浏览器的console窗口继续运行下面代码：
+
+```javascript
+console.log(o === s.constructor.prototype); // true
+```
+
+实际上，虽然javascript的对象最初都是由Object.prototype对象克隆而来的，但对象构造器的原型并不仅限于Object.prototype上，而是可以动态的指向其他对象，例如下面的代码：
+
+```javascript
+var obj = { name: 'Tony' };
+var A = function(){};
+A.prototype = obj; // 原型指向obj，也就继承了obj的属性和方法
+var a = new a();
+console.log(a.name); // 输出：Tony
+```
+
+我们看看这段代码执行的时候，js引擎做了哪些事情。
+
+1. 首先，尝试遍历对象a中的所有属性，但没有找到name这个属性。
+2. 查找name属性的这个请求被委托给对象a的构造器的原型，它被a.__proto__记录着并且指向A.prototype，而A.prototype被设置为对象obj。
+3. 在对象obj中找到了name属性，并返回它的值。
+
+当我们期望得到一个“类”，继承自另一个“类”的效果时，往往会用下面的代码来模拟实现：
+
+```javascript
+var A = function(){};
+A.prototype = { name: 'Tony' };
+
+var B = function(){};
+B.prototype = new A();
+
+var b = new B();
+console.log(b.name); // 输出：Tony
+```
+
+再看看这段代码执行时，js引擎做了什么事。
+
+1. 首先，尝试遍历对象b中的所有属性，但是没有找到name属性。
+2. 查找name属性被委托给对象b构造器的原型，它被b.__proto__记录着并且指向B.prototype，而B.prototype被设置为一个通过new A()创建出来的对象。
+3. 在该对象中依然没有找到name属性，于是请求被继续委托给这个对象构造器的原型A.prototype。
+4. 在A.prototype中找到name属性，并返回它。
+
+实际上，如果在A.prototype上面没有找到某个属性，请求就会继续委托给Object.prototype，如果Obejct.prototype中也没有某个属性，而Object.prototype的原型为null，此时返回undefined。
+
+在ECMAScript6中提供了更加直观的Class语法，这让javascript看起来像一门基于类的语言，但其背后仍是通过原型机制来创建对象，下面代码通过Class语法创建对象：
+
+```javascript
+class Animal{
+	constructor(name){
+		this.name = name;
+	}
+	getName(){
+		return this.name;
+	}
+}
+
+class Dog extends Animal{
+	constructor(name){
+		super(name);
+	}
+	speak(){
+		return "woof";
+	}
+}
+
+var dog = new Dog("wangcai");
+console.log(dog.getName + 'syas' + dog.speak());
+```
+
+## this、call和apply
+
+在javascript中，this的指向有多种，具体情况由它执行的环境决定的。
+
+1. 作为对象的方法调用时，this指向被调用的对象。
+2. 作为普通函数调用，this指向window全局对象。
+3. 构造器调用，通过new操作符实例化调用，this指向new实例化的对象。
+4. 通过call或apply方法调用，详见下面的案例。
+
+```javascript
+var func = function(a, b, c){
+	console.log([a, b, c]); // 输出[1, 2, 3]
+};
+func.apply(null, [1, 2, 3]);
+
+var funct = function(a, b, c){
+	console.log([a, b, c]); // 输出： [1, 2, 3]
+};
+funct.call(null, 1, 2, 3);
+```
+
+实际上，call和apply方法作用都是改变一个对象的this指向，只是它们接收的参数形式不同，在javascript参数的内部就是通过一个数组来表示的，从这个意义上讲，apply比call使用率更高，而call
+只是包装在apply上面的一颗语法糖。
+
+在使用call和apply的时候，如果我们传入第一个参数为null，函数体内的this会指向默认的宿主对象，在js严格模式下又不同。
+
+```javascript
+var func = function(a, b, c){
+	console.log(this); // Window {postMessage: ƒ, blur: ƒ, focus: ƒ, close: ƒ, parent: Window, …}
+};
+func.apply(null, [1, 2, 3]);
+
+var funct = function(a, b, c){
+	'use strict';
+	console.log(this); // null
+};
+func.apply(null, [1, 2, 3]);
+```
+
+**call和apply用途**
+
+1. 改变this的指向
+
+假设我们给DOM事件回调函数内部调用一个函数体，此时函数内部的this指向就不是我们预期的。
+
+```javascript
+document.getElementById('button').onclick = function(){
+	console.log(this.id); // 输出：button
+	var func = function(){
+		console.log(this.id) // 输出：undefined 因为此时this指向Window对象
+	};
+	func();
+};
+```
+
+这时候我们可以使用call方法来修正this的指向，使其依然指向某DOM元素。
+
+```javascript
+document.getElementById('button').onclick = function(){
+	console.log(this.id); // 输出：button
+	var func = function(){
+		console.log(this.id) // 输出：button
+	};
+	func.call(this);
+};
+```
+
+2. 实现Function.prototype.bind
+
+bind()方法创建一个新的函数，在调用时设置this关键字为提供的值。并在调用新函数时，将给定参数列表作为原函数的参数序列的前若干项。
+
+```javascript
+Function.prototype.bind = function(context){
+	var self = this;
+	return function(){
+		return self.apply(context, arguments);
+	}
+};
+
+var obj = { name: 'sven' };
+
+var func = function(){
+	console.log(this.name); //输出：sven
+}.bind(obj);
+
+func();
+```
+
+3. 借用其他对象的方法
+
+借用方法的第一种场景就是“借用构造函数”，即通过这种方法，实现类似继承的效果：
+
+```javascript
+var A = function(name){
+	this.name = name;
+}
+var B = function(){
+	A.apply(this, arguments);
+}
+
+B.prototype.getName = function(){
+	return this.name;
+};
+
+var b = new B('sven');
+console.log(b.getName()); // 输出：'sven'
+```
+
+借用方法的第二种场景是用于处理函数的参数对象arguments，函数的参数对象arguments是一个类数组对象，虽然它也有下标，但并非真正的数组，无法使用数组的某些方法。这种情况下，我们常常会借用Array.prototype对象上的方法。比如，想往arguments中添加一个元素：
+
+```javascript
+(function(){
+	Array.prototype.push.call(arguments, 3);
+	console.log(arguments); // 输出：[1, 2, 3]
+})(1, 2)
+```
+
+在操作arguments的时候，我们经常非常频繁地找Array.prototype对象借用方法，想把arguments转成真正的数组的时候，可以借用Array.prototype.slice方法；想
+截去列表中的头一个元素时，又可以借用Array.prototype.shift方法。
+
